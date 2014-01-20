@@ -11,7 +11,6 @@ import toxi.physics2d.VerletSpring2D;
 import toxi.physics2d.behaviors.AttractionBehavior2D;
 import toxi.physics2d.behaviors.ParticleBehavior2D;
 import toxi.processing.ToxiclibsSupport;
-import util.Color;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,14 +29,14 @@ public class PSys {
 		physics.setDrag(App.DRAG);
 		attractors = new ArrayList<>();
 		springs = new ArrayList<>();
-		bounds = new Rect(350, 50, 1100, 800);
+		bounds = new Rect(350, 50, 1200, 800);
 		physics.setWorldBounds(bounds);
 		selectedParticles = new ArrayList<>();
 	}
 
 	public void update() {
-		getPhysics().update();
-		getPhysics().setDrag(App.DRAG);
+		physics.update();
+		physics.setDrag(App.DRAG);
 		for (AttractionBehavior2D a : attractors) { a.setRadius(App.ATTR_RAD); a.setStrength(App.ATTR_STR); }
 		for (VerletSpring2D s : physics.springs) { s.setStrength(App.SPR_STR); }
 		for (VerletParticle2D n : physics.particles) { n.setWeight(2); }
@@ -52,27 +51,25 @@ public class PSys {
 		for (VerletSpring2D s : springs) { gfx.line(s.a, s.b); }
 		pg.stroke(0xff666666);
 		for (VerletParticle2D a : physics.particles) {
-			float p_wght = a.getWeight();
-			gfx.circle(a, p_wght);
-			pg.fill(0xff444444);
-			pg.text("v_weight " + p_wght, a.x + p_wght, a.y);
-			pg.noFill();
+			gfx.circle(a, a.getWeight());
 		} pg.stroke(0xff333333);
 		for (ParticleBehavior2D b : physics.behaviors) {
 			AttractionBehavior2D ba = (AttractionBehavior2D) b;
 			float b_rad = ba.getRadius();
 			gfx.circle(ba.getAttractor(), b_rad);
-			pg.fill(0xff444444);
-			pg.text("b_rad " + b_rad, ba.getAttractor().x + b_rad, ba.getAttractor().y + 10);
+			pg.fill(0xff222222);
+			pg.text("b_rad", ba.getAttractor().x + b_rad, ba.getAttractor().y - 5);
+			pg.text(b_rad, ba.getAttractor().x + b_rad, ba.getAttractor().y + 5);
 			pg.noFill();
-		} if (activeParticle != null) { pg.stroke(0xff8b6714); gfx.circle(activeParticle, 14); }
+		}
+		if (activeParticle != null) { pg.stroke(0xff8b6714); gfx.circle(activeParticle, 14); }
 		if (!selectedParticles.isEmpty()) { pg.stroke(0xff8d5427); for (VerletParticle2D v : selectedParticles) { gfx.circle(v, 10); } }
 		pg.noStroke();
 		displayInfo(gfx);
 	}
 	public void displayInfo(ToxiclibsSupport gfx) {
 		PGraphics pg = gfx.getGraphics();
-		pg.pushMatrix();
+/*		pg.pushMatrix();
 		pg.translate(1200, 50);
 		pg.fill(Color.PHYS_TXT);
 		pg.text("Springs: " + physics.springs.size(), 0, 0);
@@ -82,9 +79,9 @@ public class PSys {
 		pg.text("Drag : " + App.DF3.format(physics.getDrag()), 0, 40);
 		pg.text("Separation : " + separation, 0, 50);
 		pg.noFill();
-		pg.popMatrix();
+		pg.popMatrix();*/
 		pg.pushMatrix();
-		pg.translate(1200, 200);
+		pg.translate(300, 700);
 		pg.fill(0xffffffff);
 		for (VerletSpring2D s : physics.springs) { pg.translate(0, 10); pg.text(s.getRestLength(), 0, 0); }
 		pg.translate(0, 80);
@@ -125,11 +122,11 @@ public class PSys {
 				VerletSpring2D s;
 				if (p == p2) {
 					float len = p1.getRadius() + p.getRadius();
-					s = new VerletSpring2D(p1.verlet, p.verlet, len, 0.01f);
+					s = new VerletSpring2D(p1.getVerlet(), p.getVerlet(), len, 0.01f);
 					springs.add(s);
 				} else {
 					float len = p1.getRadius() + p.getRadius();
-					s = new VerletMinDistanceSpring2D(p1.verlet, p.verlet, len * .6f, 0.01f);
+					s = new VerletMinDistanceSpring2D(p1.getVerlet(), p.getVerlet(), len * .6f, 0.01f);
 				} physics.addSpring(s);
 			}
 		}

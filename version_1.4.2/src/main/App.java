@@ -4,6 +4,7 @@ import controlP5.*;
 import org.philhosoft.p8g.svg.P8gGraphicsSVG;
 import processing.core.PApplet;
 import toxi.geom.Vec2D;
+import toxi.physics2d.VerletSpring2D;
 import toxi.processing.ToxiclibsSupport;
 import util.Color;
 
@@ -25,7 +26,7 @@ public class App extends PApplet {
 	public static boolean SHOW_MINDIST, SHOW_ATTRACTORS, SHOW_VOR_VERTS, SHOW_VOR_INFO, SHOW_VOIDS;
 	public static boolean UPDATE_VORONOI, SHOW_VORONOI, SHOW_TAGS, SHOW_SPRINGS = true, SHOW_NODES = true, SHOW_INFO = true;
 	public static float ZOOM = 1, SCALE = 10, DRAG = 0.3f, SPR_SCALE = 1f, SPR_STR = 0.01f, NODE_WGHT = 2, ATTR_RAD = 2, ATTR_STR = -0.9f;
-	public static float NODE_STR = -.5f, NODE_SCALE = 1, NODE_PAD = 0, OBJ_SIZE = 1, OBJ_COLOR = 1, VOR_REFRESH = 1, MIN = 0.1f;
+	public static float NODE_STR = -.5f, NODE_SCALE = 1, NODE_PAD = 0, OBJ_SIZE = 1, OBJ_HUE = 1, VOR_REFRESH = 1, MIN = 0.1f;
 	public static String OBJ_NAME = "new", DRAWMODE = "bezier";
 	public static Vec2D MOUSE = new Vec2D();
 	private static ControlP5 CP5;
@@ -35,7 +36,9 @@ public class App extends PApplet {
 	static Println console;
 	static Textarea myTextarea;
 	public static boolean isShiftDown;
-	static Group properties;
+	static Group properties, debug, generator, config;
+	private Knob radiusSlider, colorSlider;
+	private Textfield nameTextfield;
 	private ArrayList<FSys.Node> nodes = new ArrayList<>();
 	private ArrayList<FSys.Relation> relations = new ArrayList<>();
 	HashMap<FSys.Node, String> map = new HashMap<>();
@@ -56,6 +59,7 @@ public class App extends PApplet {
 		colorMode(HSB, 360, 100, 100);
 		ellipseMode(RADIUS);
 		textAlign(LEFT);
+		textSize(10);
 		strokeWeight(1);
 		noStroke();
 		noFill();
@@ -63,7 +67,7 @@ public class App extends PApplet {
 		CP5 = new ControlP5(this);
 		PSYS = new PSys();
 		FSYS = new FSys();
-		setupCP5();
+		initGUI();
 	}
 	public void draw() {
 		background(Color.BG);
@@ -74,21 +78,50 @@ public class App extends PApplet {
 		pushMatrix();
 		translate(-((ZOOM * width) - width) / 2, -((ZOOM * height) - height) / 2);
 		scale(ZOOM);
-		drawShapes2D();
+		draw_shapes2D();
+		draw_HUD();
 		popMatrix();
-		drawGUI();
+		draw_GUI();
 	}
-	private void drawGUI() {
-		fill(Color.BG_MENUS);
-		rect(0, 0, 218, height);
-		rect(1500, 0, width, height);
+	private void draw_GUI() {
+		pushMatrix();
 		fill(Color.CP5_BG);
-		rect(220, 0, 80, height);
+//		rect(0, 0, 80, height);
 		noFill();
 		CP5.draw();
+		popMatrix();
 	}
+	private void draw_HUD() {
+		float totalSize = 0;
+		for (FSys.Node n : nodes) { totalSize += n.getSize(); }
+		pushMatrix();
+		translate(350, 450);
+		fill(0xff666666);
+		textAlign(RIGHT);
+		text("Property : ", 0, 0);
+		text("Mouse : ", 0, 20);
+		text("AreaTot : ", 0, 40);
 
-	private void drawShapes2D() {
+		text("Physics ", 0, 80);
+		text("Springs : ", 0, 100);
+		text("Particles : ", 0, 120);
+		text("Behaviors : ", 0, 140);
+		text("Drag : ", 0, 160);
+
+		translate(2, 0);
+		textAlign(LEFT);
+		text("Value", 0, 0);
+		text(MOUSE.x + " : " + MOUSE.y, 0, 20);
+		text(DF3.format(totalSize), 0, 40);
+
+		text(PSYS.getPhysics().springs.size(), 0, 100);
+		text(PSYS.getPhysics().particles.size(), 0, 120);
+		text(PSYS.getPhysics().behaviors.size(), 0, 140);
+		text(DF3.format(PSYS.getPhysics().getDrag()), 0, 160);
+		noFill();
+		popMatrix();
+	}
+	private void draw_shapes2D() {
 		if (SHOW_PARTICLES) PSYS.draw(GFX);
 		if (SHOW_ATTRACTORS) FSYS.draw(GFX);
 	}
@@ -101,13 +134,25 @@ public class App extends PApplet {
 		FSYS.build();
 	}
 
-	private void setupCP5() {
+	private void initGUI() {
 		CP5.enableShortcuts();
 		CP5.setAutoDraw(false);
 		CP5.setAutoSpacing(4, 8);
 		CP5.setColorBackground(Color.CP5_BG).setColorForeground(Color.CP5_FG).setColorActive(Color.CP5_ACT);
 		CP5.setColorCaptionLabel(Color.CP5_CAP).setColorValueLabel(Color.CP5_VAL);
-		CP5.begin(220, 0);
+		config = CP5.addGroup("VERLET PHYSICS SETTINGS").setBackgroundHeight(350);
+		generator = CP5.addGroup("RECURSIVE GRAPH GENERATOR").setBackgroundHeight(140);
+		properties = CP5.addGroup("OBJECT_PROPERTIES").setBackgroundHeight(200);
+		initGUI_sidebar();
+		initGUI_left();
+		initGUI_right();
+		initGUI_console();
+		styleControllers();
+		Accordion accordionLeft = CP5.addAccordion("accL").setPosition(81, 0).setWidth(219);
+		accordionLeft.addItem(config).addItem(generator).addItem(properties); accordionLeft.setCollapseMode(Accordion.MULTI); accordionLeft.open(2);
+	}
+	private void initGUI_sidebar() {
+		CP5.begin(0, 0);
 		CP5.addButton("quit").linebreak();
 		CP5.addButton("load_xml").linebreak();
 		CP5.addButton("load_conf").linebreak();
@@ -137,6 +182,30 @@ public class App extends PApplet {
 		CP5.addToggle("UPDATE_PHYSICS").setCaptionLabel("PHYSICS").linebreak();
 		CP5.addToggle("UPDATE_VORONOI").setCaptionLabel("VORONOI").linebreak();
 		CP5.end();
+	}
+	private void initGUI_left() {
+		CP5.begin(10, 32);
+		radiusSlider = CP5.addKnob("setSize").setRange(0, 200).setValue(50).setPosition(30, 20);
+		radiusSlider.addListener(new ControlListener() {
+			@Override
+			public void controlEvent(ControlEvent e) { FSYS.getActiveNode().setSize(e.getController().getValue()); marshal(); }
+		});
+		radiusSlider.hide();
+		colorSlider = CP5.addKnob("setColor").setRange(0, 360).setValue(180).setPosition(120, 20);
+		colorSlider.addListener(new ControlListener() {
+			@Override
+			public void controlEvent(ControlEvent e) { FSYS.getActiveNode().setColor((int) e.getController().getValue()); marshal(); }
+		});
+		colorSlider.hide();
+		nameTextfield = CP5.addTextfield("setName").setCaptionLabel("Unique Datablock ID Name").setPosition(20, 120).setText("untitled");
+		nameTextfield.addListener(new ControlListener() {
+			@Override
+			public void controlEvent(ControlEvent e) { FSYS.getActiveNode().setName(e.getController().getStringValue()); marshal(); }
+		});
+		nameTextfield.hide();
+		CP5.end();
+	}
+	private void initGUI_right() {
 		CP5.begin(10, 10);
 		CP5.addSlider("SCALE").setRange(1, 20).setNumberOfTickMarks(20).linebreak();
 		CP5.addSlider("ZOOM").setRange(1, 20).setNumberOfTickMarks(20).linebreak();
@@ -157,21 +226,13 @@ public class App extends PApplet {
 		CP5.addNumberbox("ITER_D").setPosition(10, 86).linebreak();
 		CP5.addNumberbox("ITER_E").setPosition(10, 110).linebreak();
 		CP5.end();
-		CP5.begin(10, 32);
-		CP5.addKnob("OBJ_SIZE").setRange(0, 200).setValue(50).setPosition(30, 20);
-		CP5.addKnob("OBJ_HUE").setRange(0, 360).setValue(180).setPosition(120, 20);
-		CP5.addTextfield("OBJ_NAME").setCaptionLabel("Unique Datablock ID Name").setPosition(20, 120).setText("untitled").linebreak();
-		CP5.end();
-		myTextarea = CP5.addTextarea("txt").setPosition(10, 0).setSize(200, 290);
-		console = CP5.addConsole(myTextarea);//
-		styleControllers();
 	}
+	private void initGUI_console() {
+		myTextarea = CP5.addTextarea("txt").setPosition(1350, 50).setSize(200, 800);
+		console = CP5.addConsole(myTextarea);
+	}
+
 	private void styleControllers() {
-		//CP5.loadProperties(("./lib/config/defaults.ser"));Group file = CP5.addGroup("FILE").setBackgroundHeight(280);
-		Group config = CP5.addGroup("VERLET PHYSICS SETTINGS").setBackgroundHeight(260).setBackgroundColor(0xff222222);
-		Group generator = CP5.addGroup("RECURSIVE GRAPH GENERATOR").setBackgroundHeight(140).setBackgroundColor(0xff222222);
-		properties = CP5.addGroup("OBJECT_PROPERTIES").setBackgroundHeight(200).setBackgroundColor(0xff222222);
-		Group debug = CP5.addGroup("CONSOLE").setPosition(0, 600).setWidth(219).setBackgroundHeight(300).setBackgroundColor(0xff222222);
 		for (Button b : CP5.getAll(Button.class)) {
 			b.setSize(80, 22);
 			b.setColorBackground(Color.CP5_BG);
@@ -179,7 +240,8 @@ public class App extends PApplet {
 			b.setColorForeground(0xff666666);
 			b.getCaptionLabel().align(ControlP5.CENTER, ControlP5.CENTER).getStyle();
 			b.getCaptionLabel().setColor(Color.CP5_CAP);
-		} for (Toggle t : CP5.getAll(Toggle.class)) {
+		}
+		for (Toggle t : CP5.getAll(Toggle.class)) {
 			t.setSize(80, 16);
 			t.setColorBackground(Color.CP5_BG);
 			t.setColorActive(0xff555555);
@@ -198,8 +260,7 @@ public class App extends PApplet {
 			s.setGroup(config);
 			s.showTickMarks(false).setHandleSize(8);
 			s.setSliderMode(Slider.FLEXIBLE);
-			s.setColorForeground(Color.CP5_FG);
-			s.setColorActive(Color.CP5_CAP);
+			s.setColorForeground(Color.CP5_FG).setColorActive(Color.CP5_CAP);
 			s.getValueLabel().align(ControlP5.RIGHT_OUTSIDE, ControlP5.CENTER).getStyle().setPaddingLeft(4);
 			s.getCaptionLabel().align(ControlP5.RIGHT, ControlP5.CENTER).getStyle().setPaddingRight(4);
 		} for (Numberbox b : CP5.getAll(Numberbox.class)) {
@@ -221,26 +282,27 @@ public class App extends PApplet {
 			t.getCaptionLabel().align(ControlP5.CENTER, ControlP5.BOTTOM_OUTSIDE).getStyle().setPaddingTop(4);
 		} for (Textarea t : CP5.getAll(Textarea.class)) {
 			t.setLineHeight(14);
-			t.setGroup(debug);
-			t.setColor(Color.CP5_CAP).setColorBackground(Color.CP5_BG).setColorForeground(Color.CP5_FG);
+			t.setColor(0xff333333).setColorBackground(Color.CP5_BG).setColorForeground(Color.CP5_FG);
 			t.getCaptionLabel().align(ControlP5.CENTER, ControlP5.BOTTOM_OUTSIDE).getStyle().setPaddingTop(4);
+			t.disableColorBackground();
 		} for (Group g : CP5.getAll(Group.class)) {
-			g.setBarHeight(32);
+			g.setBarHeight(32).setWidth(219).setBackgroundColor(0xff222222);
 			g.getCaptionLabel().align(ControlP5.LEFT, ControlP5.CENTER).getStyle().setPaddingLeft(4);
 		}
-		Accordion accordion = CP5.addAccordion("acc").setPosition(0, 0).setWidth(219).addItem(config).addItem(generator).addItem(properties);
-		accordion.setCollapseMode(Accordion.MULTI);
 	}
 
 	private void createNode(String name, Vec2D pos, float size, int color, int id) {
-		FSys.Node n = new FSys.Node();
-		n.setId(id);
-		n.setName(name);
-		n.setSize(size);
-		n.setPos(pos);
-		n.setColor(color);
-		n.getVerlet().setWeight(size);
+		FSys.Node n = new FSys.Node(name, id, size, MOUSE.x, MOUSE.y, color);
 		nodes.add(n);
+		marshal();
+	}
+	public void createSpring(FSys.Node p1, FSys.Node p2) {
+		FSys.Relation r = new FSys.Relation();
+		r.setFrom(p1.getId());
+		r.setTo(p2.getId());
+		float len = p1.getRadius() + p2.getRadius();
+		VerletSpring2D s = new VerletSpring2D(p1.getVerlet(), p2.getVerlet(), len, 0.01f);
+		relations.add(r);
 		marshal();
 	}
 	private void marshal() {
@@ -260,32 +322,60 @@ public class App extends PApplet {
 	public void mouseMoved() { MOUSE.set(mouseX, mouseY); }
 	public void mousePressed() {
 		Vec2D mousePos = new Vec2D(mouseX, mouseY);
-		FSYS.selectNodeNearPosition(mousePos);
+		if (mouseButton == RIGHT) {
+			FSYS.selectNodeNearPosition(mousePos);
+			if (FSYS.hasActiveNode()) {
+				radiusSlider.setValue(FSYS.getActiveNode().getSize());
+				colorSlider.setValue(FSYS.getActiveNode().getColor());
+				nameTextfield.setValue(FSYS.getActiveNode().getName());
+				radiusSlider.show();
+				colorSlider.show();
+				nameTextfield.show();
+			} else {
+				radiusSlider.hide();
+				colorSlider.hide();
+				nameTextfield.hide();
+			}
+		}
 	}
 	public void mouseDragged() {
 		Vec2D mousePos = new Vec2D(mouseX, mouseY);
-		FSYS.moveActiveNode(mousePos);
+		if (mouseButton == RIGHT) {
+			if (FSYS.hasActiveNode()) {
+				FSYS.moveActiveNode(mousePos);
+			}
+		}
 	}
-	public void mouseReleased() { }
-
+	public void mouseReleased() {
+		if (mouseButton == RIGHT) {
+			if (FSYS.hasActiveNode()) {
+				marshal();
+			}
+		}
+	}
 	public void keyPressed() {
 		if (key == CODED && keyCode == SHIFT) { isShiftDown = true; }
 		switch (key) {
 			case 'a':
-				createNode(OBJ_NAME, MOUSE, OBJ_SIZE, (int) OBJ_COLOR, nodes.size());
+				createNode(OBJ_NAME, MOUSE, OBJ_SIZE, (int) OBJ_HUE, nodes.size());
 				break;
 			case 'p':
 				marshal();
 				break;
 			case 'r':
 				if (FSYS.getSelectedNodes().size() >= 2) {
-					PSYS.springamajig(FSYS.getSelectedNodes().get(0), FSYS.getSelectedNodes().get(1));
+					createSpring(FSYS.getSelectedNodes().get(0), FSYS.getSelectedNodes().get(1));
+//					PSYS.springamajig(FSYS.getSelectedNodes().get(0), FSYS.getSelectedNodes().get(1));
 					FSYS.getSelectedNodes().clear();
 				} System.out.println(FSYS.getSelectedNodes().size());
 				break;
 			case 'y':
 				PSYS.clearSprings();
 				break;
+			case 'm':
+				if (FSYS.hasActiveNode()) {
+					FSYS.getActiveNode().getVerlet().set(MOUSE);
+				}
 		}
 	}
 	public void keyReleased() { if (key == CODED && keyCode == SHIFT) { isShiftDown = false; } }

@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <flowgraph>
-    <node name="new" id="0" size="50.0" x="623.0" y="423.0"/>
-    <node name="new" id="1" size="50.0" x="810.0" y="550.0"/>
-    <node name="new" id="2" size="50.0" x="869.0" y="288.0"/>
+    <node name="new" id="0" size="86.0" x="663.0" y="403.0" color="1"/>
+    <node name="new" id="1" size="1.0" x="698.0" y="411.0" color="1"/>
+    <node name="new" id="2" size="1.0" x="701.0" y="224.0" color="1"/>
+    <rel from="0" to="1"/>
+    <rel from="1" to="2"/>
 </flowgraph>
